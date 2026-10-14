@@ -34,3 +34,7 @@ Connected-device discovery schema, communication/user port identification on act
 The inspected GitHub robot branch still contained older tuning (50/100/25/20 mechanism speeds and 35 claw torque). The user's working 100/100 revision was not found on that branch. Select the actual working local checkout and preserve it; no attempt was made to change either version or reconcile them automatically.
 
 See [HARDWARE-TESTING.md](HARDWARE-TESTING.md) for the physical checklist and [WINDOWS-QUICKSTART.md](WINDOWS-QUICKSTART.md) for installation and the later USB session.
+
+## Controller layout update (0.1.2)
+
+Replaced the rectangular button grid with a V5-shaped controller: two upper sticks, a lower left directional diamond, X/Y/A/B in the physical V5 diamond, and paired shoulder buttons. The existing selection callback and assignments are preserved. TypeScript/production frontend build passed. An isolated browser render of the actual component was visually checked at 800px and 430px viewport widths; all 12 button targets were clicked and their selected state checked. No robot configuration, speed, or torque data was changed.
