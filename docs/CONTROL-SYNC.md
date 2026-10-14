@@ -1,9 +1,9 @@
 # Reverse-drive and claw settings — version 0.1.3
 
 The robot and app remain separate repositories. The robot's **actual Python
-source** is the saved/deployed configuration. Choose its updated development
-branch `codex/94132b-control-improvements`; the app changes are on
-`codex/reverse-toggle-claw-hold`. Nothing has been merged into main or flashed.
+source** is the saved/deployed configuration. Both repositories now contain the
+validated changes on `main`, merged with explicit user approval. Nothing was
+flashed. Download the app from [GitHub Releases](https://github.com/specialshadows/VEX-94132B-ControlCenter/releases/latest).
 
 The app reads centralized schema v2 in `src/main.py`, validates the motor ports,
 and changes literal values using source ranges. It does not execute the robot
@@ -49,9 +49,9 @@ is deferred pending gearing, reference, load and drift measurements.
 ## Exact deployment source
 
 The selected robot folder was `/Users/hikaru/Documents/94132B`, a second checkout
-of the same robot repository. It must be on the updated robot development branch
-before loading settings. No duplicate project is created. On another computer,
-select your existing robot checkout and switch it to that branch.
+of the same robot repository. It has been updated to the merged `main` program
+so configuration and deployment use the current code. No duplicate project is created. On another computer,
+select your existing robot checkout and pull the latest `main`.
 
 The preparation step reads the saved `src/main.py`, validates its configuration,
 and stages its exact bytes and SHA-256 hash. Changing the source or staged bytes

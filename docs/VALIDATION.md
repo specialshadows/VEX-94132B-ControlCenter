@@ -74,3 +74,9 @@ records describe the previous revision. Manufacturer protections remain active.
 GitHub Release assets are limited to the Mac `.app` packaged in a ZIP and the
 Windows installer `.exe` (which contains the required local service). No physical
 robot test or flash is implied by these builds.
+
+## Published desktop release
+
+[Desktop build 38645308993](https://github.com/specialshadows/VEX-94132B-ControlCenter/actions/runs/38645308993) completed successfully for Windows x64, macOS Apple Silicon and macOS Intel, including the service and controller/preset tests. The GitHub-built Mac app passed strict deep signature verification after extraction and installation; its packaged helper and native UI read the actual robot main program with 100% torque and TOGGLE mode. The Windows NSIS installer was downloaded from the successful Windows job and verified as a complete PE executable. No Windows install or Brain test is claimed.
+
+The [0.1.3 Release](https://github.com/specialshadows/VEX-94132B-ControlCenter/releases/tag/control-center-v0.1.3) contains exactly two user download assets: the Apple Silicon Mac `.app` in a metadata-preserving ZIP and the Windows x64 installer `.exe`. A GitHub release cannot attach an app bundle as a raw folder. Intel builds passed but are not included in these two requested downloads. Both repositories are merged to main; the existing unrelated Mac-preview deletion in the robot checkout remains untouched.
