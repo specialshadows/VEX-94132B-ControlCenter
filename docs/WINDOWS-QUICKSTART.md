@@ -1,5 +1,7 @@
 # Windows 10/11 — later today
 
+**Keep your working 100% speed / 100% torque version.** Select that existing local checkout before synchronizing. At inspection time, GitHub `main` still had intake 50, cascade 100, claw angle 25, claw in/out 20, and claw torque 35; the working 100/100 revision was not present on that branch. Control Center loads the actual selected file, accepts 0–100% values, and never normalizes them to the older values. Mapping presets affect buttons only. Pull is blocked when local changes are present. No robot repository changes were made during this implementation.
+
 1. Download the Windows installer from the private Control Center repository's latest successful **Desktop builds** Actions run. Sign into GitHub with an account that can access the repository. The NSIS `.exe` installs the app and provides its shortcut; alternatively extract the portable ZIP and keep both executables together.
 2. Install Git for Windows (includes Git Credential Manager), GitHub CLI if using the in-app sign-in, and Microsoft Edge WebView2 if absent. Initialize the official VEX VS Code extension once so its vexcom utility and VEX USB drivers are installed. No Python or Node installation is needed to run a packaged Control Center.
 3. Open Control Center → GITHUB. Choose your existing robot checkout, or choose a new empty folder and clone `https://github.com/specialshadows/94132B.git`. Sign in through the system browser/device code, then refresh status. Never paste credentials into robot code.
