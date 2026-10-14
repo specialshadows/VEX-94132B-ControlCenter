@@ -45,6 +45,17 @@ jobs:
         run: pnpm tauri build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify and archive macOS app
+        if: runner.os == 'macOS'
+        run: |
+          APP="src-tauri/target/release/bundle/macos/94132B Control Center.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          printf '%s' '{"action":"diagnose","args":{"text":"pass"}}' | "$APP/Contents/MacOS/cc-service" > service-smoke.json
+          python -c 'import json; r=json.load(open("service-smoke.json")); assert r == {"ok": True, "result": []}, r'
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "94132B-Control-Center-${{ matrix.name }}.zip"
+          mkdir macos-roundtrip
+          ditto -x -k "94132B-Control-Center-${{ matrix.name }}.zip" macos-roundtrip
+          codesign --verify --deep --strict --verbose=2 "macos-roundtrip/94132B Control Center.app"
       - uses: actions/upload-artifact@v4
         with:
           name: 94132B-Control-Center-${{ matrix.name }}
@@ -53,7 +64,7 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app
+            94132B-Control-Center-macOS-*.zip
       - name: Assemble Windows portable folder
         if: runner.os == 'Windows'
         shell: pwsh

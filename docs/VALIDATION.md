@@ -12,7 +12,11 @@ Code revision: `c70bf7d355dfd49328fd5206dda5f36f52399253`.
 | macOS Apple Silicon | 19 passed | Built | App and DMG | Success |
 | macOS Intel | 19 passed | Built | App and DMG | Success |
 
-All three jobs completed successfully. These are unsigned development packages; production code signing and Apple notarization are not configured. Build success does not establish installed-GUI or hardware operation on every target OS version.
+All three jobs completed successfully, but installing the 0.1.0 macOS download subsequently exposed an incomplete bundle signature: `code has no resources but signature indicates they must be present`. Those older macOS artifacts should not be used. Build success alone did not establish installation success.
+
+Version 0.1.1 configures full ad-hoc signing of the macOS app and helper. Hardened runtime is disabled for this development identity because the PyInstaller helper loads extracted Python libraries without a Developer ID team identity. CI now verifies the full signature, executes the signed packaged helper, and verifies the app again after ZIP extraction. macOS artifacts contain a metadata-preserving inner ZIP instead of a raw `.app`. Apple notarization and Windows Authenticode signing are not configured. A browser-downloaded macOS development build can still require user approval in Privacy & Security.
+
+Version 0.1.1 local Apple Silicon repair checks: strict deep signature verification passed before packaging, after ZIP extraction, and after installation in `/Applications`. The signed packaged helper returned `{"ok":true,"result":[]}` for a syntax-check smoke test. The newly installed application launched successfully and its native process was observed running; a complete GUI walkthrough and USB hardware test remain pending. The broken 0.1.0 installation was preserved under local `artifacts/installation-backups/` before replacement. No quarantine attributes were removed and no global Gatekeeper settings were changed.
 
 ## Additional checks actually performed
 
