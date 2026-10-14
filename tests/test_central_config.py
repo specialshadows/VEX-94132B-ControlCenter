@@ -22,7 +22,7 @@ class CentralConfigTests(unittest.TestCase):
         for key,value in {'REVERSE_DRIVE_BUTTON':'Left','REVERSE_DRIVE_MODE':'TOGGLE',
             'REVERSE_DRIVE_ENABLED':True,'CLAW_HOLD_ENABLED':True,'CLAW_HOLD_MODE':'HOLD',
             'CLAW_GRAVITY_COMPENSATION_ENABLED':False,'CLAW_ROTATION_SPEED':25,
-            'CLAW_INOUT_SPEED':20,'CLAW_TORQUE_LIMIT':35}.items():
+            'CLAW_INOUT_SPEED':20,'CLAW_TORQUE_LIMIT':100}.items():
             self.assertEqual(config['values'][key],value)
         self.assertEqual(config['mapping']['cascade_down'],'L2')
         self.assertEqual(config['ports']['claw_rotate'],4)
@@ -73,6 +73,7 @@ class CentralConfigTests(unittest.TestCase):
         service.patch_config(config)
 
     def test_torque_increase_requires_explicit_warning_approval(self):
+        self.file.write_text(self.file.read_text().replace('CLAW_TORQUE_LIMIT = 100','CLAW_TORQUE_LIMIT = 35'))
         config=self.config(); config['values']['CLAW_TORQUE_LIMIT']=40
         before=self.file.read_bytes()
         self.assertIn('heating',service.patch_config(config)['warnings'][0])

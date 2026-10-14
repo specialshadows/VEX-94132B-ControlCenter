@@ -39,8 +39,9 @@ requests the built-in HOLD at the released angle once per stop. Motor B remains
 BRAKE. Gravity compensation is displayed as disabled/unimplemented and cannot
 be activated through a pretend setting.
 
-The current 35% claw torque cap remains unchanged. The app previews a heating and
-force warning and requires explicit approval before saving a torque increase.
+The user explicitly approved 100% claw torque allowance on October 14. The app
+reads that value from the robot source; rotation/in-out speeds remain 25%/20%.
+Any later increase from a lowered value still receives the reviewed heating/force warning.
 HOLD sufficiency requires a supported physical test. The encoder is motor
 rotation, not an established absolute claw-angle sensor; feedforward/PID tuning
 is deferred pending gearing, reference, load and drift measurements.

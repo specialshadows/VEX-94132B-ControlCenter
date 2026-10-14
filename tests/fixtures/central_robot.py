@@ -70,8 +70,9 @@ CASCADE_SPEED = 100
 CLAW_ROTATION_SPEED = 25
 CLAW_INOUT_SPEED = 20
 
-# Existing claw torque cap is retained for BOTH 5.5W motors.
-CLAW_TORQUE_LIMIT = 35
+# User-approved 100% torque allowance for BOTH 5.5W claw motors.
+# Speeds remain 25% rotation / 20% in-out; built-in protections remain active.
+CLAW_TORQUE_LIMIT = 100
 CLAW_HOLD_ENABLED = True
 CLAW_HOLD_MODE = "HOLD"
 # No feedforward model is validated for this mechanism. Enabling it is rejected.

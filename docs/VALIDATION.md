@@ -65,3 +65,12 @@ The normal-drive sign still needs a physical direction check. Claw HOLD strength
 cannot be inferred from command tests; the existing 35% cap, load, gearing, binding,
 slip and thermal state may affect it. No torque increase, feedforward, custom PID,
 automatic cascade endpoints or software travel limiter was added. No robot was flashed.
+
+## User-approved torque and Release assets
+
+The user explicitly approved 100% claw torque allowance on October 14. The robot
+and Control Center fixture now use 100% while speeds remain 25%/20%; earlier 35%
+records describe the previous revision. Manufacturer protections remain active.
+GitHub Release assets are limited to the Mac `.app` packaged in a ZIP and the
+Windows installer `.exe` (which contains the required local service). No physical
+robot test or flash is implied by these builds.
