@@ -1,5 +1,5 @@
 {
-  "name": "94132b-control-center", "version": "0.1.3", "private": true, "type": "module",
+  "name": "94132b-control-center", "version": "0.1.4", "private": true, "type": "module",
   "scripts": {"dev":"vite --host 127.0.0.1", "build":"tsc && vite build", "tauri":"tauri", "test":"python3 -m unittest discover -s tests -v && node --test tests/control-config.test.mjs"},
   "dependencies": {"@tauri-apps/api":"^2.8.0", "@monaco-editor/react":"^4.7.0", "monaco-editor":"^0.52.2", "react":"^19.1.0", "react-dom":"^19.1.0"},
   "devDependencies": {"@tauri-apps/cli":"^2.8.0", "@types/react":"^19.1.0", "@types/react-dom":"^19.1.0", "typescript":"~5.9.2", "vite":"^7.1.0"}

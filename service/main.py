@@ -455,13 +455,14 @@ def tool_info(a):
 def parse_devices(raw):
     try: payload=json.loads(raw)
     except ValueError: raise Failure('VEX discovery did not return valid JSON.')
+    if not isinstance(payload,dict): raise Failure('Unrecognized VEX discovery document.')
     usb=payload.get('usb')
     if not isinstance(usb,(dict,list)): raise Failure('Unrecognized VEX discovery schema. Use official VEXcode until this utility version is supported.')
     found=[]
     def visit(node):
         if isinstance(node,dict):
             lower={k.lower():v for k,v in node.items()}
-            platform=str(lower.get('platform','')).upper(); kind=str(lower.get('device',lower.get('type',''))).lower()
+            platform=str(lower.get('platform',lower.get('family',''))).upper(); kind=str(lower.get('device',lower.get('type',''))).lower()
             communication=lower.get('communication',lower.get('communication_port'))
             if platform=='V5' and kind=='brain' and isinstance(communication,str) and communication:
                 found.append(dict(id=str(lower.get('id',lower.get('serial',communication))),name=str(lower.get('name','V5 Brain')),port=communication,userPort=lower.get('user',lower.get('user_port')),platform='V5',type='brain'))
@@ -472,9 +473,75 @@ def parse_devices(raw):
     visit(usb)
     return dict(devices=found,raw=payload,unrecognized=bool(usb) and not found)
 
+
+# These IDs/interfaces come from the installed official VEX extension's
+# Windows device manager: VID 2888, V5 Brain PID 0501, comms MI_00, user MI_02.
+# Native device records replace guesses about vexcom's connected-USB JSON.
+WINDOWS_V5_SCAN = '''[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false);
+$ErrorActionPreference = 'Stop';
+@(Get-CimInstance -ClassName Win32_PnPEntity -Filter "PNPDeviceID LIKE '%VID_2888&PID_0501%'" |
+  Select-Object Name,PNPDeviceID,Present,ConfigManagerErrorCode) | ConvertTo-Json -Compress -Depth 3'''
+
+
+def parse_windows_v5_ports(raw):
+    try: records=json.loads(raw or '[]')
+    except ValueError: raise Failure('Windows port discovery did not return valid JSON.')
+    if isinstance(records,dict): records=[records]
+    if not isinstance(records,list): raise Failure('Unrecognized Windows port inventory.')
+    ports={}
+    for record in records:
+        if not isinstance(record,dict): continue
+        pnp=str(record.get('PNPDeviceID','')).upper()
+        if not re.match(r'^USB\\VID_2888&PID_0501&MI_(00|02)\\',pnp): continue
+        if record.get('Present') is False or record.get('ConfigManagerErrorCode') != 0: continue
+        match=re.search(r'\((COM[1-9][0-9]*)\)\s*$',str(record.get('Name','')),re.I)
+        if not match: continue
+        # Both interfaces share the parent USB identity. The final &0000/0002
+        # suffix is the interface-specific part, as in VEX's Windows pairing.
+        interface=re.search(r'&MI_(00|02)\\',pnp).group(1)
+        identity=pnp.split('\\',2)[2].rsplit('&',1)[0]
+        key=identity or pnp
+        group=ports.setdefault(key,{})
+        port=match.group(1).upper()
+        if interface in group and group[interface]!=port:
+            raise Failure('Ambiguous Windows V5 interfaces. Reconnect the Brain and scan again.')
+        group[interface]=port
+    found=[]
+    for identity,group in ports.items():
+        # A user-port-only record is never a valid upload destination.
+        if '00' not in group: continue
+        found.append(dict(id='windows-v5:'+identity,name='V5 Brain',port=group['00'],
+                          userPort=group.get('02'),platform='V5',type='brain'))
+    if len({device['port'] for device in found})!=len(found):
+        raise Failure('Duplicate Windows V5 communication ports; discovery is ambiguous.')
+    return found
+
+
+def windows_v5_ports():
+    powershell=Path(os.environ.get('SystemRoot','C:/Windows'))/'System32/WindowsPowerShell/v1.0/powershell.exe'
+    _,out,_=run([powershell,'-NoProfile','-NonInteractive','-Command',WINDOWS_V5_SCAN],timeout=12)
+    return parse_windows_v5_ports(out),json.loads(out or '[]')
+
+
 def devices(a):
-    p=tool(a); _,out,_=run([p,'--usb','--json'],timeout=15)
-    result=parse_devices(out); result['tool']=str(p); return result
+    p=tool(a); out=''
+    try:
+        _,out,_=run([p,'--usb','--json'],timeout=15)
+        result=parse_devices(out)
+    except Failure as error:
+        result=dict(devices=[],raw=out,unrecognized=True,discoveryError=str(error))
+    result['tool']=str(p)
+    if os.name=='nt':
+        try:
+            native,inventory=windows_v5_ports()
+            result['windowsPorts']=inventory
+            if native:
+                result['devices']=native
+                result['unrecognized']=False
+                result['discoveryMethod']='Windows V5 hardware IDs and communication interface'
+        except Failure as error:
+            result['windowsDiscoveryError']=str(error)
+    return result
 
 def current_device(a,identity):
     found=[d for d in devices(a)['devices'] if d['id']==identity]

@@ -53,3 +53,7 @@ Build status must be read from actual Actions runs; workflow files alone do not 
 ## Version 0.1.3 — reverse toggle and claw holding
 
 The validated robot and Control Center changes are merged into their respective `main` branches. Get the Mac app ZIP or Windows installer EXE from [GitHub Releases](https://github.com/specialshadows/VEX-94132B-ControlCenter/releases/latest). The app reads and writes the actual centralized `src/main.py` literals, with no separate deployment configuration. D-pad Left defaults to Toggle Reverse Drive; HOLD mode and feature disable are also available. Port 4 holding and rotation speed reflect the real program, while unimplemented gravity compensation cannot be enabled. Torque increases require an explicit heating/force warning approval. See [configuration sync and testing](docs/CONTROL-SYNC.md).
+
+## Version 0.1.4 — Windows Brain detection
+
+Windows discovery now reads the operating system's present V5 Brain USB interfaces, identifies the communication port by hardware ID, and pairs the optional user-terminal port by USB identity. It no longer depends solely on the connected-device JSON shape from vexcom. The VEX BRAIN page exposes complete scan diagnostics for troubleshooting. This changes desktop detection only; robot settings and behavior are unchanged. Actual connected-Brain verification is still pending.
