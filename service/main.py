@@ -368,7 +368,7 @@ def ticket_path(a):
     return data_dir(a)/'deployments'/token
 
 def flash(a):
-    confirmed(a); directory=ticket_path(a); ticket=json.loads((directory/'ticket.json').read_text())
+    confirmed(a); directory=ticket_path(a); ticket=json.loads((directory/'ticket.json').read_text(encoding='utf-8'))
     if time.time()-ticket['created']>300: raise Failure('Deployment review expired. Prepare again.')
     if (directory/'attempted').exists(): raise Failure('This deployment was already attempted. Prepare again before retrying.')
     root=repo(a)
@@ -388,7 +388,7 @@ def flash(a):
     (directory/'receipt.json').write_text(json.dumps(receipt)); return receipt
 
 def run_program(a):
-    confirmed(a); directory=ticket_path(a); ticket=json.loads((directory/'ticket.json').read_text()); receipt=json.loads((directory/'receipt.json').read_text())
+    confirmed(a); directory=ticket_path(a); ticket=json.loads((directory/'ticket.json').read_text(encoding='utf-8')); receipt=json.loads((directory/'receipt.json').read_text(encoding='utf-8'))
     if not receipt['uploaded'] or not receipt['slotVerified']: raise Failure('A verified upload is required before running.')
     if time.time()-ticket['created']>600: raise Failure('Run approval expired. Inspect the Brain before running manually.')
     d=current_device(a,ticket['device']['id'])
@@ -402,7 +402,7 @@ def assets(a):
     root=repo(a); manifest=scoped(root,'assets/tile_manifest.json'); expected={}
     if manifest.exists():
         # Current repository uses 24 tiles for each of these four UI prefixes.
-        content=json.loads(manifest.read_text())
+        content=json.loads(manifest.read_text(encoding='utf-8'))
         if isinstance(content,dict) and set(content)=={'logo','boot','auton','driver'}:
             for prefix in ('logo','boot','auton','driver'):
                 names=[f'{prefix}{i:02}.bmp' for i in range(24)]
@@ -446,6 +446,6 @@ def main():
         if request['action'] not in HANDLERS: raise Failure('Unknown local operation.')
         result=HANDLERS[request['action']](request.get('args',{})); response=dict(ok=True,result=result)
     except Exception as error: response=dict(ok=False,error=clean(str(error)))
-    print(json.dumps(response,ensure_ascii=False))
+    print(json.dumps(response,ensure_ascii=True))
 
 if __name__=='__main__': main()

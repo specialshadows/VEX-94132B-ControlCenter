@@ -73,7 +73,7 @@ class ServiceTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root=(Path(self.tmp.name)/'robot').resolve(); self.root.mkdir(); (self.root/'src').mkdir()
-        self.file=self.root/'src/main.py'; self.file.write_text(fixture())
+        self.file=self.root/'src/main.py'; self.file.write_text(fixture(),encoding='utf-8')
         self.data=Path(self.tmp.name)/'appdata'; self.data.mkdir()
         subprocess.run(['git','init','-q',str(self.root)],check=True)
         for k,v in [('user.name','Test'),('user.email','test@example.invalid')]: subprocess.run(['git','-C',str(self.root),'config',k,v],check=True)
@@ -88,18 +88,18 @@ class ServiceTests(unittest.TestCase):
     def test_confirmation_and_hash_protect_file(self):
         a=self.config(); a.update(apply=True)
         with self.assertRaises(service.Failure): service.patch_config(a)
-        a['confirmed']=True; self.file.write_text(self.file.read_text()+'\n# changed\n')
+        a['confirmed']=True; self.file.write_text(self.file.read_text(encoding='utf-8')+'\n# changed\n',encoding='utf-8')
         with self.assertRaises(service.Failure): service.patch_config(a)
     def test_patch_preserves_ui_and_backs_up(self):
-        before=self.file.read_text(); a=self.config(); a['values']['CLAW_HOLD']=True; a.update(apply=True,confirmed=True)
-        result=service.patch_config(a); after=self.file.read_text()
-        self.assertEqual(Path(result['backup']).read_text(),before)
+        before=self.file.read_text(encoding='utf-8'); a=self.config(); a['values']['CLAW_HOLD']=True; a.update(apply=True,confirmed=True)
+        result=service.patch_config(a); after=self.file.read_text(encoding='utf-8')
+        self.assertEqual(Path(result['backup']).read_text(encoding='utf-8'),before)
         self.assertEqual(before[before.index('class RobotUI:'):before.index('def two_button_motor')],after[after.index('class RobotUI:'):after.index('def two_button_motor')])
         self.assertIn('CLAW_ROTATE_SPEED, HOLD',after); self.assertIn('claw_activate.set_stopping(BRAKE)',after)
         self.assertTrue(service.config_read(self.a)['values']['CLAW_HOLD'])
     def test_button_swap_updates_stationary_guard_simultaneously(self):
         a=self.config(); a['mapping']['cascade_up']='R1'; a['mapping']['intake']='L1'; a.update(apply=True,confirmed=True)
-        service.patch_config(a); text=self.file.read_text()
+        service.patch_config(a); text=self.file.read_text(encoding='utf-8')
         self.assertIn('stationary = not controller_1.buttonR1',text)
         self.assertIn('inward = controller_1.buttonL1',text)
     def test_conflicts_and_motor_protection(self):
@@ -110,7 +110,7 @@ class ServiceTests(unittest.TestCase):
             with self.assertRaises(service.Failure): service.patch_config(a)
     def test_reverse_does_not_change_turn(self):
         a=self.config(); a['values']['REVERSE_DRIVE_ENABLED']=True; a.update(apply=True,confirmed=True); service.patch_config(a)
-        tree=ast.parse(self.file.read_text()); drive=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='drive_control')
+        tree=ast.parse(self.file.read_text(encoding='utf-8')); drive=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='drive_control')
         reverse=next(n for n in ast.walk(drive) if isinstance(n,ast.If) and isinstance(n.test,ast.BoolOp))
         self.assertEqual([n.targets[0].id for n in reverse.body if isinstance(n,ast.Assign)],['forward'])
     def test_escape_and_symlink_rejected(self):
@@ -119,18 +119,18 @@ class ServiceTests(unittest.TestCase):
         (self.root/'src/escape.py').symlink_to(self.data/'outside.py')
         with self.assertRaises(service.Failure): service.scoped(self.root,'src/escape.py')
     def test_duplicate_ports_rejected(self):
-        self.file.write_text(self.file.read_text().replace('Ports.PORT14','Ports.PORT13'))
+        self.file.write_text(self.file.read_text(encoding='utf-8').replace('Ports.PORT14','Ports.PORT13'),encoding='utf-8')
         with self.assertRaises(service.Failure): service.config_read(self.a)
     def test_save_file_does_not_execute(self):
         text='raise RuntimeError("must not execute")\n'
         result=service.save_file({**self.a,'path':'src/main.py','text':text,'hash':service.digest(self.file.read_bytes()),'confirmed':True})
-        self.assertEqual(self.file.read_text(),text); self.assertTrue(result['backup'])
+        self.assertEqual(self.file.read_text(encoding='utf-8'),text); self.assertTrue(result['backup'])
     def test_dirty_pull_never_discards(self):
-        self.file.write_text(self.file.read_text()+'\n# local\n')
+        self.file.write_text(self.file.read_text(encoding='utf-8')+'\n# local\n',encoding='utf-8')
         with self.assertRaisesRegex(service.Failure,'Local changes'): service.git_action({**self.a,'operation':'pull'})
-        self.assertIn('# local',self.file.read_text())
+        self.assertIn('# local',self.file.read_text(encoding='utf-8'))
     def test_commit_only_selected_files(self):
-        self.file.write_text(self.file.read_text()+'\n# local\n'); (self.root/'notes.md').write_text('leave uncommitted')
+        self.file.write_text(self.file.read_text(encoding='utf-8')+'\n# local\n',encoding='utf-8'); (self.root/'notes.md').write_text('leave uncommitted')
         service.git_action({**self.a,'operation':'commit','files':['src/main.py'],'message':'Tune fixture','confirmed':True})
         self.assertIn('notes.md',service.git_status(self.a)['changes']); self.assertNotIn('src/main.py',service.git_status(self.a)['changes'])
     def test_device_parser_refuses_other_platform_and_schema(self):
