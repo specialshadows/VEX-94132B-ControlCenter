@@ -1,0 +1,14 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/binaries/cc-service-*
+service/build/
+service/dist/
+*.spec
+__pycache__/
+artifacts/
+.venv/
+.DS_Store
+src-tauri/gen/
+src-tauri/icons/android/
+src-tauri/icons/ios/

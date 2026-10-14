@@ -1,0 +1,6 @@
+{
+  "$schema":"https://schema.tauri.app/config/2", "productName":"94132B Control Center", "version":"0.1.0", "identifier":"org.lowell.94132b.controlcenter",
+  "build":{"beforeDevCommand":"pnpm dev","beforeBuildCommand":"pnpm build","devUrl":"http://localhost:5173","frontendDist":"../dist"},
+  "app":{"windows":[{"label":"main","title":"94132B CONTROL CENTER","width":1280,"height":860,"minWidth":900,"minHeight":650}],"security":{"csp":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost"}},
+  "bundle":{"active":true,"targets":"all","externalBin":["binaries/cc-service"],"icon":["icons/icon.png","icons/icon.icns","icons/icon.ico"],"macOS":{"minimumSystemVersion":"11.0"},"windows":{"nsis":{"displayLanguageSelector":false}}}
+}
