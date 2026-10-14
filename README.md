@@ -57,3 +57,9 @@ The validated robot and Control Center changes are merged into their respective 
 ## Version 0.1.4 — Windows Brain detection
 
 Windows discovery now reads the operating system's present V5 Brain USB interfaces, identifies the communication port by hardware ID, and pairs the optional user-terminal port by USB identity. It no longer depends solely on the connected-device JSON shape from vexcom. The VEX BRAIN page exposes complete scan diagnostics for troubleshooting. This changes desktop detection only; robot settings and behavior are unchanged. Actual connected-Brain verification is still pending.
+
+## Version 0.1.5 — Windows in-app updates
+
+Use **CHECK FOR UPDATES** in the header or Settings. Windows x64 can check this public repository without GitHub sign-in, download a newer release inside the app, verify its exact size and GitHub SHA-256, and start the interactive installer after a separate confirmation. The app closes only after the installer has started. Save unsaved robot edits first. Valid cached installers are reused. Existing 0.1.3 installations need one manual update to 0.1.5 to gain this feature. Mac in-app installation is not implemented; its app ZIP remains available from Releases. App updates preserve the robot checkout and app settings and never flash the Brain.
+
+The updater accepts only stable releases from `specialshadows/VEX-94132B-ControlCenter`, the exact named Windows installer, HTTPS GitHub download hosts, and GitHub-provided SHA-256 metadata. It blocks missing checksums, changed release reviews, and corrupt or unexpected executable files. GitHub account/repository compromise is outside the protection of a checksum from that same source; installers remain development builds without Authenticode signing. CA certificates are bundled with the helper, with normal TLS verification enabled.

@@ -44,6 +44,8 @@ async fn service(window: tauri::Window, state: State<'_,AppState>, action: Strin
         if !args.is_object() { args=json!({}); }
         args["_root"]=json!(saved.repo); args["_tool"]=json!(saved.vexcom);
         args["_sd"]=json!(saved.sd); args["_data"]=json!(data);
+        args["_version"]=json!(app.package_info().version.to_string());
+        args["_target"]=json!(if cfg!(all(windows,target_arch="x86_64")) {"windows-x64"} else {"macos"});
         let mut command;
         if cfg!(debug_assertions) {
             command=Command::new(std::env::var("CC_BACKEND_PYTHON").unwrap_or_else(|_| if cfg!(windows) {"python".into()} else {"python3".into()}));
@@ -57,7 +59,12 @@ async fn service(window: tauri::Window, state: State<'_,AppState>, action: Strin
         child.stdin.take().unwrap().write_all(json!({"action":action,"args":args}).to_string().as_bytes()).map_err(|e|e.to_string())?;
         let output=child.wait_with_output().map_err(|e|e.to_string())?;
         let response:Value=serde_json::from_slice(&output.stdout).map_err(|_|"Local service returned an invalid response".to_string())?;
-        if response["ok"]==true { Ok(response["result"].clone()) } else { Err(response["error"].as_str().unwrap_or("Local service failed").to_string()) }
+        if response["ok"]==true {
+            // The service has rechecked the official release checksum and
+            // successfully started the interactive installer before we exit.
+            if action=="update_install" && response["result"]["launched"]==true { app.exit(0); }
+            Ok(response["result"].clone())
+        } else { Err(response["error"].as_str().unwrap_or("Local service failed").to_string()) }
     }).await.map_err(|e|e.to_string())?
 }
 fn main() {

@@ -17,6 +17,9 @@ import sys
 import tempfile
 import time
 import uuid
+import ssl
+import urllib.request
+import urllib.parse
 
 BUTTONS = ('R1', 'R2', 'L1', 'L2', 'Up', 'Down', 'Left', 'Right', 'X', 'B', 'A', 'Y')
 DEFAULT_MAPPING = dict(zip(('intake', 'outtake', 'cascade_up', 'cascade_down', 'angle_up', 'angle_down', 'claw_in', 'claw_out', 'lower_reference', 'upper_reference'), ('R1','R2','L1','L2','Up','Down','X','B','A','Y')))
@@ -642,7 +645,123 @@ def copy_assets(a):
         if (dest/item['name']).read_bytes()!=raw: raise Failure('SD copy verification failed.')
     return dict(copied=len(items),destination=str(dest))
 
-HANDLERS={'config_read':config_read,'config_preview':patch_config,'git_status':git_status,'git_action':git_action,'auth_status':auth_status,'auth_start':auth_start,'clone':clone,'files':files,'read_file':read_file,'diagnose':diagnose,'save_file':save_file,'tool_info':tool_info,'devices':devices,'prepare':prepare,'flash':flash,'run_program':run_program,'assets':assets,'copy_assets':copy_assets}
+UPDATE_REPO='specialshadows/VEX-94132B-ControlCenter'
+UPDATE_ASSET='94132B-ControlCenter-Windows-x64-Setup.exe'
+UPDATE_API='https://api.github.com/repos/'+UPDATE_REPO+'/releases/latest'
+UPDATE_LIMIT=100_000_000
+
+
+def update_url_allowed(url):
+    parsed=urllib.parse.urlsplit(url)
+    return (parsed.scheme=='https' and parsed.hostname in
+            ('api.github.com','github.com','release-assets.githubusercontent.com','objects.githubusercontent.com')
+            and parsed.port in (None,443) and not parsed.username and not parsed.password)
+
+
+class UpdateRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        if not update_url_allowed(newurl): raise Failure('Update redirected outside GitHub; download blocked.')
+        return super().redirect_request(req,fp,code,msg,headers,newurl)
+
+
+def update_get(url,limit):
+    if not update_url_allowed(url): raise Failure('Untrusted update URL.')
+    # PyInstaller bundles this CA file, so HTTPS verification does not depend on
+    # the developer's Python installation or disabling certificate checks.
+    import certifi
+    context=ssl.create_default_context(cafile=certifi.where())
+    opener=urllib.request.build_opener(urllib.request.HTTPSHandler(context=context),UpdateRedirect())
+    request=urllib.request.Request(url,headers={'User-Agent':'94132B-ControlCenter-Updater','Accept':'application/vnd.github+json' if url==UPDATE_API else 'application/octet-stream'})
+    try:
+        with opener.open(request,timeout=25) as response:
+            content=response.read(limit+1)
+    except (OSError,ValueError) as error: raise Failure('Update request failed. Check internet access and try again: '+str(error))
+    if len(content)>limit: raise Failure('Update response exceeds its size limit.')
+    return content
+
+
+def update_version(text):
+    match=re.fullmatch(r'(?:control-center-v)?(\d+)\.(\d+)\.(\d+)',str(text))
+    if not match: raise Failure('Unrecognized stable release version.')
+    return tuple(map(int,match.groups()))
+
+
+def update_check(a):
+    current=str(a['_version'])
+    current_version=update_version(current)
+    try: release=json.loads(update_get(UPDATE_API,1_000_000))
+    except ValueError: raise Failure('GitHub returned invalid release metadata.')
+    if not isinstance(release,dict) or release.get('draft') or release.get('prerelease'):
+        raise Failure('GitHub did not return a published stable release.')
+    tag=release.get('tag_name',''); latest=update_version(tag)
+    result=dict(current=current,latest='.'.join(map(str,latest)),tag=tag,
+                available=latest>current_version,supported=a.get('_target')=='windows-x64',
+                releaseUrl='https://github.com/'+UPDATE_REPO+'/releases/tag/'+tag)
+    if not result['supported']:
+        return dict(result,message='In-app installation is currently Windows x64 only. Mac downloads remain on GitHub Releases.')
+    if not result['available']: return dict(result,message='Control Center is up to date.')
+    assets=[item for item in release.get('assets',[]) if isinstance(item,dict) and item.get('name')==UPDATE_ASSET]
+    if len(assets)!=1: raise Failure('The latest release has no unique Windows installer yet. Try again later.')
+    asset=assets[0]; expected='https://github.com/'+UPDATE_REPO+'/releases/download/'+tag+'/'+UPDATE_ASSET
+    if asset.get('browser_download_url')!=expected: raise Failure('Unexpected installer download location.')
+    checksum=asset.get('digest','')
+    if not isinstance(checksum,str) or not re.fullmatch(r'sha256:[0-9a-f]{64}',checksum):
+        raise Failure('GitHub has not supplied the installer SHA-256 checksum. Update blocked.')
+    size=asset.get('size')
+    if type(size)!=int or not 64<=size<=UPDATE_LIMIT: raise Failure('Unexpected installer size.')
+    return dict(result,url=expected,sha256=checksum[7:],size=size,message='A Windows update is available.')
+
+
+def update_destination(a,release):
+    folder=data_dir(a)/'updates'/release['tag']
+    if folder.is_symlink() or folder.parent.is_symlink(): raise Failure('Update folder must not be a symbolic link.')
+    folder.mkdir(parents=True,exist_ok=True)
+    target=folder/UPDATE_ASSET
+    if target.is_symlink(): raise Failure('Installer must not be a symbolic link.')
+    return target
+
+
+def update_installer_valid(raw,release):
+    if len(raw)!=release['size'] or digest(raw)!=release['sha256']: return False
+    if len(raw)<64 or raw[:2]!=b'MZ': return False
+    offset=struct.unpack_from('<I',raw,60)[0]
+    return raw[offset:offset+4]==b'PE\0\0'
+
+
+def reviewed_update(a):
+    confirmed(a)
+    release=update_check(a)
+    if not release['supported'] or not release['available']: raise Failure('No supported Windows update is available.')
+    if a.get('tag')!=release['tag']: raise Failure('The latest release changed. Check for updates and review it again.')
+    return release
+
+
+def update_download(a):
+    release=reviewed_update(a); target=update_destination(a,release)
+    cached=target.is_file() and update_installer_valid(target.read_bytes(),release)
+    if not cached:
+        raw=update_get(release['url'],release['size'])
+        if not update_installer_valid(raw,release): raise Failure('Installer checksum, size, or executable format did not match GitHub. Nothing installed.')
+        atomic_write(target,raw)
+    return dict(tag=release['tag'],sha256=release['sha256'],downloaded=True,cached=cached)
+
+
+def update_install(a):
+    release=reviewed_update(a)
+    if os.name!='nt': raise Failure('Windows installers can only run on Windows.')
+    target=update_destination(a,release)
+    if not target.is_file() or not update_installer_valid(target.read_bytes(),release):
+        raise Failure('Download and verify this installer before installing.')
+    # Interactive NSIS installer; no silent flags or elevation bypass. It lives
+    # in app data, outside the application directory being replaced.
+    try:
+        subprocess.Popen([str(target)],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL,close_fds=True,creationflags=0x00000208)
+    except OSError as error: raise Failure('Installer could not start: '+str(error))
+    return dict(launched=True,tag=release['tag'])
+
+
+HANDLERS={'config_read':config_read,'config_preview':patch_config,'git_status':git_status,'git_action':git_action,'auth_status':auth_status,'auth_start':auth_start,'clone':clone,'files':files,'read_file':read_file,'diagnose':diagnose,'save_file':save_file,'tool_info':tool_info,'devices':devices,'prepare':prepare,'flash':flash,'run_program':run_program,'assets':assets,'copy_assets':copy_assets,'update_check':update_check,'update_download':update_download,'update_install':update_install}
 
 def main():
     try:

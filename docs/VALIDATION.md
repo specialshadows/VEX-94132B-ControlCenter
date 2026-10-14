@@ -84,3 +84,7 @@ The [0.1.3 Release](https://github.com/specialshadows/VEX-94132B-ControlCenter/r
 ## Windows discovery correction (0.1.4)
 
 Local validation passed 34 Python service tests, including nine new Windows discovery cases, plus three controller/preset tests. TypeScript checking and the production frontend build passed. Fixtures cover reversed COM numbering, optional user interfaces, multiple Brains, rejected hardware/error records, ambiguous records, family-based USB JSON, failed USB utility scans, and blocked native queries. These tests do not use real Windows hardware. No robot source, configuration, motor behavior, or Brain slot was changed. Platform build outcomes are recorded after packaging.
+
+## Windows updater (0.1.5)
+
+Local tests cover newer/equal/older versions, Windows versus Mac support, exact release URLs, absent checksums, ambiguous assets, redirect-host restrictions, verified download reuse, corrupt executables, stale reviews, symlinked caches, and rechecking the installer before launching it. Installer execution is mocked. Windows physical installation and Brain communication remain pending. Packaging now exercises public GitHub HTTPS through the frozen helper on each platform, so the embedded certificate bundle is checked rather than relying on development Python.

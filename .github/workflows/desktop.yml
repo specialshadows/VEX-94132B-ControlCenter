@@ -43,6 +43,8 @@ jobs:
           node --test tests/control-config.test.mjs
       - name: Prepare native service
         run: python scripts/build_service.py
+      - name: Verify packaged updater HTTPS
+        run: python scripts/check_packaged_updates.py
       - name: Build desktop application and installers
         run: pnpm tauri build
         env:
