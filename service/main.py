@@ -21,7 +21,7 @@ import uuid
 BUTTONS = ('R1', 'R2', 'L1', 'L2', 'Up', 'Down', 'Left', 'Right', 'X', 'B', 'A', 'Y')
 DEFAULT_MAPPING = dict(zip(('intake', 'outtake', 'cascade_up', 'cascade_down', 'angle_up', 'angle_down', 'claw_in', 'claw_out', 'lower_reference', 'upper_reference'), ('R1','R2','L1','L2','Up','Down','X','B','A','Y')))
 MOTORS = {'front_left':14,'back_left':13,'front_right':12,'back_right':11,'top_intake':8,'bottom_intake':20,'pulley_left':9,'pulley_right':2,'claw_rotate':4,'claw_activate':3}
-LIMITS = {'DRIVE_SCALE':(0,1), 'TURN_SCALE':(0,1), 'DEADZONE':(0,30), 'INTAKE_SPEED':(0,100), 'PULLEY_SPEED':(0,100), 'CLAW_ROTATE_SPEED':(0,100), 'CLAW_ACTIVATE_SPEED':(0,100), 'CLAW_TORQUE_LIMIT':(0,35)}
+LIMITS = {'DRIVE_SCALE':(0,1), 'TURN_SCALE':(0,1), 'DEADZONE':(0,30), 'INTAKE_SPEED':(0,100), 'PULLEY_SPEED':(0,100), 'CLAW_ROTATE_SPEED':(0,100), 'CLAW_ACTIVATE_SPEED':(0,100), 'CLAW_TORQUE_LIMIT':(0,100)}
 FLAGS = tuple(k.upper()+'_REVERSED' for k in MOTORS) + ('PULLEY_ENABLED','REVERSE_DRIVE_ENABLED','DRIVE_FORWARD_REVERSED','TURN_REVERSED')
 
 class Failure(Exception): pass
@@ -249,6 +249,11 @@ def git_action(a):
     elif op=='stash_list': return dict(output=git(root,'stash','list')[1])
     elif op=='stash_apply':
         confirmed(a); result=git(root,'stash','apply','stash@{0}')
+    elif op=='unstage':
+        confirmed(a); selected=a.get('files',[])
+        if not selected: raise Failure('Select the files to unstage.')
+        for name in selected: scoped(root,name)
+        result=git(root,'restore','--staged','--',*selected)
     elif op=='commit':
         confirmed(a); files=a.get('files',[])
         if not files: raise Failure('Select the changed files to commit.')
@@ -417,7 +422,11 @@ def assets(a):
             p=scoped(root,str(p.relative_to(root)),('.bmp',)); raw=p.read_bytes()
             if len(raw)>=54 and raw[:2]==b'BM':
                 width,height=struct.unpack_from('<ii',raw,18); bpp=struct.unpack_from('<H',raw,28)[0]; compression=struct.unpack_from('<I',raw,30)[0]
-                entry.update(width=width,height=height,bpp=bpp,compression=compression,valid=(width,abs(height))==expected.get(name,(80,60)) and bpp in (8,24) and compression==0 and len(raw)<=5878,preview='data:image/bmp;base64,'+base64.b64encode(raw).decode())
+                offset=struct.unpack_from('<I',raw,10)[0]; declared_size=struct.unpack_from('<I',raw,2)[0]
+                planes=struct.unpack_from('<H',raw,26)[0]; dib=struct.unpack_from('<I',raw,14)[0]
+                stride=((max(0,width)*bpp+31)//32)*4
+                valid=((width,abs(height))==expected.get(name,(80,60)) and bpp in (8,24) and compression==0 and planes==1 and dib>=40 and offset>=14+dib and declared_size==len(raw) and offset+stride*abs(height)<=len(raw)<=5878)
+                entry.update(width=width,height=height,bpp=bpp,compression=compression,valid=valid,preview='data:image/bmp;base64,'+base64.b64encode(raw).decode() if valid else None)
         result.append(entry)
     return result
 

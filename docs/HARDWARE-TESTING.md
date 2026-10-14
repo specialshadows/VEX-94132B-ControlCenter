@@ -15,7 +15,7 @@ Before operating a competition robot, a human must verify:
 - Drive: ports 14/13 left, 12/11 right, Axis3 forward, Axis1 turn. Hold-to-reverse affects forward only and stops on release.
 - Cascade: ports 9/2 receive opposite rotations and cooperate physically; stop immediately if shafts fight. HOLD engages on release. A/Y display references do not provide overtravel protection.
 - Claw angle P4 (5.5W) and in/out P3 (5.5W) remain separate. Review HOLD patch and test its thermal/torque behavior. No gravity compensation controller is implemented.
-- Intake P8/P20 at 50%, cascade initially 100%, angle 25%, in/out 20%. Existing claw torque limit remains at most 35%. Commanded speed is not unlimited torque.
+- Preserve the user’s working speed and torque settings, including 100% values. Read the selected local source rather than assuming GitHub main has the newest tuning. Manufacturer current and thermal limits remain active; a 100% command does not bypass them.
 - SD tiles load from the card root and preserve the original UI, including missing-card fallback.
 
 Do not enable autonomous travel or assume encoder feedback provides absolute mechanical limits. Firmware changes and VM updates are performed through official VEX tools.

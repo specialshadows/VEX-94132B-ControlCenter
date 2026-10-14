@@ -105,7 +105,7 @@ class ServiceTests(unittest.TestCase):
     def test_conflicts_and_motor_protection(self):
         a=self.config(); a['mapping']['intake']='L1'
         with self.assertRaises(service.Failure): service.patch_config(a)
-        for key,val in [('INTAKE_SPEED',101),('PULLEY_LEFT_REVERSED',True),('CLAW_TORQUE_LIMIT',36)]:
+        for key,val in [('INTAKE_SPEED',101),('PULLEY_LEFT_REVERSED',True),('CLAW_TORQUE_LIMIT',101)]:
             a=self.config(); a['values'][key]=val
             with self.assertRaises(service.Failure): service.patch_config(a)
     def test_reverse_does_not_change_turn(self):
@@ -160,5 +160,47 @@ class ServiceTests(unittest.TestCase):
     def test_secret_redaction(self):
         self.assertNotIn('ghp_abcdefghijk',service.clean('ghp_abcdefghijk'))
         self.assertNotIn('secret',service.clean('https://user:secret@github.com/foo/bar'))
+    def test_unstage_preserves_working_file(self):
+        raw=self.file.read_bytes()+b'\n# Keep this work\n'; self.file.write_bytes(raw)
+        service.git(self.root,'add','--','src/main.py')
+        service.git_action({**self.a,'operation':'unstage','files':['src/main.py'],'confirmed':True})
+        self.assertEqual(self.file.read_bytes(),raw)
+        self.assertEqual(service.git(self.root,'diff','--cached','--name-only')[1],'')
+    def test_hold_can_be_toggled_repeatedly(self):
+        for enabled in (True,False,True):
+            a=self.config(); a['values']['CLAW_HOLD']=enabled; a.update(apply=True,confirmed=True)
+            service.patch_config(a)
+            self.assertEqual(service.config_read(self.a)['values']['CLAW_HOLD'],enabled)
+    def test_unrelated_edits_preserve_100_percent_tuning(self):
+        text=self.file.read_text(encoding='utf-8')
+        for key in ('INTAKE_SPEED','PULLEY_SPEED','CLAW_ROTATE_SPEED','CLAW_ACTIVATE_SPEED','CLAW_TORQUE_LIMIT'):
+            text=service.re.sub(r'^'+key+r' = \d+',key+' = 100',text,flags=service.re.M)
+        self.file.write_bytes(text.encode('utf-8'))
+        a=self.config()
+        for key in ('INTAKE_SPEED','PULLEY_SPEED','CLAW_ROTATE_SPEED','CLAW_ACTIVATE_SPEED','CLAW_TORQUE_LIMIT'):
+            self.assertEqual(a['values'][key],100)
+        a['mapping']['intake']='L1'; a['mapping']['cascade_up']='R1'
+        preview=service.patch_config(a)['diff']
+        self.assertNotIn('SPEED =',preview); self.assertNotIn('TORQUE_LIMIT =',preview)
+        a.update(apply=True,confirmed=True); service.patch_config(a)
+        after=service.config_read(self.a)
+        for key in ('INTAKE_SPEED','PULLEY_SPEED','CLAW_ROTATE_SPEED','CLAW_ACTIVATE_SPEED','CLAW_TORQUE_LIMIT'):
+            self.assertEqual(after['values'][key],100)
+    def test_asset_copy_and_truncation_guard(self):
+        folder=self.root/'assets/sdcard'; folder.mkdir(parents=True)
+        manifest={prefix:[f'{prefix}{i:02}.bmp' for i in range(24)] for prefix in ('logo','boot','auton','driver')}
+        (folder.parent/'tile_manifest.json').write_text(json.dumps(manifest),encoding='utf-8')
+        # Synthetic complete 8-bit BMP, with a 256-color palette and padded rows.
+        raw=bytearray(1078+80*60); raw[:2]=b'BM'
+        struct.pack_into('<I',raw,2,len(raw)); struct.pack_into('<I',raw,10,1078)
+        struct.pack_into('<IiiHHI',raw,14,40,80,60,1,8,0)
+        for names in manifest.values():
+            for name in names: (folder/name).write_bytes(raw)
+        destination=Path(self.tmp.name)/'mounted-sd'; destination.mkdir()
+        r=service.copy_assets({**self.a,'_sd':str(destination),'confirmed':True})
+        self.assertEqual(r['copied'],96); self.assertEqual((destination/'logo00.bmp').read_bytes(),raw)
+        (folder/'logo00.bmp').write_bytes(raw[:54])
+        with self.assertRaisesRegex(service.Failure,'missing or invalid'): service.copy_assets({**self.a,'_sd':str(destination),'confirmed':True,'overwrite':True})
+        self.assertEqual((destination/'logo00.bmp').read_bytes(),raw)
 
 if __name__=='__main__': unittest.main()
