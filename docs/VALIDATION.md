@@ -38,3 +38,30 @@ See [HARDWARE-TESTING.md](HARDWARE-TESTING.md) for the physical checklist and [W
 ## Controller layout update (0.1.2)
 
 Replaced the rectangular button grid with a V5-shaped controller: two upper sticks, a lower left directional diamond, X/Y/A/B in the physical V5 diamond, and paired shoulder buttons. The existing selection callback and assignments are preserved. TypeScript/production frontend build passed. An isolated browser render of the actual component was visually checked at 800px and 430px viewport widths; all 12 button targets were clicked and their selected state checked. No robot configuration, speed, or torque data was changed.
+
+## Reverse toggle and claw holding (0.1.3, October 14, 2026)
+
+- Robot development commit `2c595041590d8ab76759fd658fd0f80077ff5792` passed 38
+  control/UI host tests and source compilation. The Brain UI, ports, reversal
+  flags, torque cap, autonomous function and single Competition object are protected.
+- Control Center passed 25 Python service tests plus 3 controller/preset tests,
+  TypeScript checking, production frontend build, and the local ARM64 Mac app build.
+- Centralized v2 read/save/reload tests preserve runtime functions and stage the
+  exact saved Python bytes. Changed files invalidate deployment review. Tests cover
+  both toggle/hold modes, conflicts, disabled reverse, backups, presets, and explicit
+  torque-increase approval. All USB/deployment process inputs remain synthetic.
+- The packaged signed helper read the actual selected `/Users/hikaru/Documents/94132B`
+  checkout on the updated robot branch and returned Left/TOGGLE, Port 4 holding,
+  25% rotation, 20% in/out and the retained 35% torque cap.
+- The complete Mac app passed strict deep signature verification and was installed
+  in `/Applications`, preserving the earlier 0.1.2 app under local installation backups.
+  Native UI inspection confirmed version 0.1.3, the Left toggle assignment, mode selector,
+  claw HOLD checkbox, speeds/torque values and disabled gravity-compensation status.
+- The new local Mac ZIP is `artifacts/94132B-Control-Center-0.1.3-macOS-arm64.zip`.
+  New Windows/Intel installers and real Brain/USB tests have not been validated
+  by this local run. Earlier platform results above apply only to their named revisions.
+
+The normal-drive sign still needs a physical direction check. Claw HOLD strength
+cannot be inferred from command tests; the existing 35% cap, load, gearing, binding,
+slip and thermal state may affect it. No torque increase, feedforward, custom PID,
+automatic cascade endpoints or software travel limiter was added. No robot was flashed.

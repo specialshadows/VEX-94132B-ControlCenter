@@ -38,7 +38,9 @@ jobs:
           pnpm install --frozen-lockfile
           python -m pip install -r requirements-build.txt
       - name: Service integration and safety tests
-        run: python -m unittest discover -s tests -v
+        run: |
+          python -m unittest discover -s tests -v
+          node --test tests/control-config.test.mjs
       - name: Prepare native service
         run: python scripts/build_service.py
       - name: Build desktop application and installers

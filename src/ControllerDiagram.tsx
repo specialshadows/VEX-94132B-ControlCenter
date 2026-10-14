@@ -1,12 +1,12 @@
-type Props = {selectedButton: string; onSelect: (button: string) => void};
+type Props = {selectedButton: string; onSelect: (button: string) => void; assignments?: Record<string,string>};
 
 /** V5 face layout: both sticks above the directional and letter diamonds. */
-export function ControllerDiagram({selectedButton, onSelect}: Props) {
+export function ControllerDiagram({selectedButton, onSelect, assignments={}}: Props) {
   const button = (name: string, position: string, display = name) => (
     <button type="button" key={name}
       className={`controller-input ${position}${selectedButton === name ? ' selected' : ''}`}
-      aria-label={`Select ${name} button`} aria-pressed={selectedButton === name}
-      title={name} onClick={() => onSelect(name)}>{display}</button>
+      aria-label={`Select ${name} button: ${assignments[name]||'Unassigned'}`} aria-pressed={selectedButton === name}
+      title={`${name} → ${assignments[name]||'Unassigned'}`} onClick={() => onSelect(name)}>{display}</button>
   );
   return <div className="controller" role="group" aria-label="Interactive V5 controller button diagram">
     <svg className="controller-shell" viewBox="0 0 650 410" aria-hidden="true">

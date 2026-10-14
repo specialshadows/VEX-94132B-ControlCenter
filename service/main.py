@@ -101,6 +101,7 @@ def assignments(tree):
     return {n.targets[0].id:n for n in tree.body if isinstance(n,ast.Assign) and len(n.targets)==1 and isinstance(n.targets[0],ast.Name)}
 
 def literal(n):
+    if n is None: return None
     try: return ast.literal_eval(n.value)
     except (ValueError,TypeError): return None
 
@@ -145,7 +146,7 @@ def hardware(tree):
     if 1 in ports.values(): raise Failure('Port 1 is reserved for the radio.')
     return ports
 
-def config_read(a):
+def legacy_config_read(a):
     _,raw,text,tree=source(repo(a),a.get('path','src/main.py'))
     nodes=assignments(tree)
     values={k:literal(nodes[k]) for k in (*LIMITS,*FLAGS,'REVERSE_DRIVE_BUTTON') if k in nodes}
@@ -162,7 +163,7 @@ def node_span(text,node):
     end=sum(len(x.encode()) for x in lines[:node.end_lineno-1])+node.end_col_offset
     return start,end
 
-def patch_config(a):
+def legacy_patch_config(a):
     root=repo(a); p,raw,text,tree=source(root,a.get('path','src/main.py'))
     if a.get('hash')!=digest(raw): raise Failure('Robot file changed since it was loaded. Reload before applying changes.')
     old=config_read(a); values=a['values']; mapping=a['mapping']
@@ -209,12 +210,139 @@ def patch_config(a):
             updated=updated.replace('        CLAW_ROTATE_SPEED, HOLD'+newline,'        CLAW_ROTATE_SPEED, BRAKE'+newline).replace('claw_rotate.stop(HOLD)','claw_rotate.stop(BRAKE)').replace('claw_rotate.set_stopping(HOLD)','claw_rotate.set_stopping(BRAKE)')
     ast.parse(updated); hardware(ast.parse(updated))
     diff=''.join(difflib.unified_diff(text.splitlines(True),updated.splitlines(True),fromfile=a.get('path','src/main.py'),tofile=a.get('path','src/main.py')))
+    increase=values.get('CLAW_TORQUE_LIMIT',0) > old['values'].get('CLAW_TORQUE_LIMIT',0)
+    warnings=['Increasing claw torque can increase current, heating and force. Support the claw and test within manufacturer limits.'] if increase else []
     if a.get('apply'):
         confirmed(a)
+        if increase and a.get('torqueIncreaseApproved') is not True:
+            raise Failure('Explicit torque-increase approval is required after reviewing the heating/force warning.')
         backup=data_dir(a)/'backups'/str(uuid.uuid4()); backup.parent.mkdir(exist_ok=True); backup.write_bytes(raw)
         if p.read_bytes()!=raw: raise Failure('File changed during review. Reload.')
         atomic_write(p,updated.encode()); return dict(saved=True,backup=str(backup),hash=digest(updated.encode()))
-    return dict(diff=diff,hash=digest(raw))
+    return dict(diff=diff,hash=digest(raw),warnings=warnings)
+
+# Centralized robot v2: these names are the actual literals in src/main.py.
+# Legacy files keep their guarded adapter; no config JSON replaces robot source.
+CENTRAL_MAPPING = dict(zip(DEFAULT_MAPPING, (
+    'INTAKE_IN_BUTTON','INTAKE_OUT_BUTTON','CASCADE_UP_BUTTON','CASCADE_DOWN_BUTTON',
+    'CLAW_ROTATION_UP_BUTTON','CLAW_ROTATION_DOWN_BUTTON','CLAW_INOUT_FORWARD_BUTTON',
+    'CLAW_INOUT_REVERSE_BUTTON','COFFIN_ZERO_BUTTON','COFFIN_MAX_BUTTON')))
+CENTRAL_LIMITS = {'DRIVE_SCALE':(0,1),'TURN_SCALE':(0,1),'DEADZONE':(0,100),
+    'INTAKE_SPEED':(0,100),'CASCADE_SPEED':(0,100),'CLAW_ROTATION_SPEED':(0,100),
+    'CLAW_INOUT_SPEED':(0,100),'CLAW_TORQUE_LIMIT':(0,100)}
+CENTRAL_FLAGS = tuple(k for k in FLAGS if k != 'TURN_REVERSED') + (
+    'DRIVE_STEERING_REVERSED','CLAW_HOLD_ENABLED','CLAW_GRAVITY_COMPENSATION_ENABLED')
+CENTRAL_STRINGS = ('REVERSE_DRIVE_BUTTON','REVERSE_DRIVE_MODE','CLAW_HOLD_MODE','CASCADE_CONTROL_MODE')
+BUTTON_LABELS = {button.upper():button for button in BUTTONS}
+
+
+def central_validate(values,mapping):
+    if set(values) != set((*CENTRAL_LIMITS,*CENTRAL_FLAGS,*CENTRAL_STRINGS)):
+        raise Failure('Centralized configuration schema changed. Reload the robot file.')
+    for key,(lo,hi) in CENTRAL_LIMITS.items():
+        if type(values[key]) not in (int,float) or not lo <= values[key] <= hi:
+            raise Failure(f'{key} must be between {lo} and {hi}.')
+    for key in CENTRAL_FLAGS:
+        if type(values[key]) is not bool: raise Failure(key+' must be enabled or disabled.')
+    if values['REVERSE_DRIVE_MODE'] not in ('HOLD','TOGGLE'):
+        raise Failure('Reverse-drive mode must be HOLD or TOGGLE.')
+    if values['CLAW_HOLD_MODE'] != 'HOLD': raise Failure('Claw holding supports HOLD only.')
+    if values['CLAW_GRAVITY_COMPENSATION_ENABLED']:
+        raise Failure('Gravity compensation is not implemented. Leave it disabled.')
+    if values['CASCADE_CONTROL_MODE'] != 'TWO_BUTTON_MANUAL':
+        raise Failure('Keep the cascade in TWO_BUTTON_MANUAL mode.')
+    if values['REVERSE_DRIVE_BUTTON'] not in BUTTONS:
+        raise Failure('Select a real V5 reverse-drive button.')
+    if set(mapping) != set(CENTRAL_MAPPING) or any(v not in BUTTONS for v in mapping.values()):
+        raise Failure('Every action must use a real V5 controller button.')
+    if len(set(mapping.values())) != len(mapping): raise Failure('Two actions are assigned to the same button.')
+    if values['REVERSE_DRIVE_ENABLED'] and values['REVERSE_DRIVE_BUTTON'] in mapping.values():
+        raise Failure('Reverse driving conflicts with another button assignment.')
+    if values['PULLEY_LEFT_REVERSED'] != values['PULLEY_RIGHT_REVERSED']:
+        raise Failure('Facing pulley motors must retain matching reversal flags.')
+
+
+def central_read(a):
+    _,raw,text,tree=source(repo(a),a.get('path','src/main.py'))
+    nodes=assignments(tree)
+    if literal(nodes.get('CONTROL_SCHEMA_VERSION')) != 2:
+        raise Failure('Update the robot program to the centralized v2 configuration first.')
+    required=(*CENTRAL_LIMITS,*CENTRAL_FLAGS,*CENTRAL_STRINGS,*CENTRAL_MAPPING.values())
+    missing=[key for key in required if key not in nodes]
+    if missing: raise Failure('Robot configuration is incomplete: '+', '.join(missing))
+    values={key:literal(nodes[key]) for key in (*CENTRAL_LIMITS,*CENTRAL_FLAGS,*CENTRAL_STRINGS)}
+    try:
+        values['REVERSE_DRIVE_BUTTON']=BUTTON_LABELS[values['REVERSE_DRIVE_BUTTON']]
+        mapping={role:BUTTON_LABELS[literal(nodes[key])] for role,key in CENTRAL_MAPPING.items()}
+    except (KeyError,TypeError): raise Failure('Robot button constants must use uppercase V5 names.')
+    central_validate(values,mapping)
+    functions={node.name:node for node in tree.body if isinstance(node,ast.FunctionDef)}
+    for function,roles in {'intake_control':('intake','outtake'),
+        'pulley_control':('cascade_up','cascade_down'),
+        'claw_control':('angle_up','angle_down','claw_in','claw_out'),
+        'coffin_calibration_control':('lower_reference','upper_reference','cascade_up','cascade_down')}.items():
+        if function not in functions: raise Failure('Missing control function: '+function)
+        used={call.args[0].id for call in ast.walk(functions[function]) if isinstance(call,ast.Call)
+              and isinstance(call.func,ast.Name) and call.func.id=='button_pressed'
+              and call.args and isinstance(call.args[0],ast.Name)}
+        if not all(CENTRAL_MAPPING[role] in used for role in roles):
+            raise Failure(function+' does not use the centralized button settings.')
+    if 'update_reverse_drive' not in functions or 'claw_rotation_stop_mode' not in functions:
+        raise Failure('Reverse/HOLD runtime helpers are missing. Update the robot program.')
+    for caller,helper in (('drive_control','update_reverse_drive'),('claw_control','claw_rotation_stop_mode')):
+        if not any(isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id==helper
+                   for node in ast.walk(functions[caller])):
+            raise Failure(caller+' does not use '+helper+'.')
+    # Constant edits cannot silently activate cascade endpoint movement.
+    stops={'DRIVE_STOPPING':'COAST','INTAKE_STOPPING':'BRAKE',
+           'CASCADE_STOPPING':'HOLD','CLAW_INOUT_STOPPING':'BRAKE'}
+    for key,expected in stops.items():
+        if key not in nodes or not isinstance(nodes[key].value,ast.Name) or nodes[key].value.id!=expected:
+            raise Failure(key+' differs from the supported stopping configuration. Review code first.')
+    return dict(values=values,mapping=mapping,ports=hardware(tree),hash=digest(raw),
+        schemaVersion=2,reverseImplemented=True,
+        travelLimits='No software cascade travel limits. A/Y calibrate the display only.',
+        gravityCompensation='Disabled: no validated mechanism model or feedforward controller.',
+        clawHoldStatus=('Port 4 holds the released angle once per stop' if values['CLAW_HOLD_ENABLED'] else 'Port 4 active holding disabled: BRAKE')+'; Port 3 remains BRAKE. Torque cap is '+str(values['CLAW_TORQUE_LIMIT'])+'%.')
+
+
+def config_read(a):
+    _,_,_,tree=source(repo(a),a.get('path','src/main.py'))
+    nodes=assignments(tree)
+    if 'CONTROL_SCHEMA_VERSION' in nodes or 'CASCADE_SPEED' in nodes: return central_read(a)
+    return dict(legacy_config_read(a),schemaVersion=1)
+
+
+def patch_config(a):
+    old=config_read(a)
+    if old.get('schemaVersion') != 2: return legacy_patch_config(a)
+    root=repo(a); p,raw,text,tree=source(root,a.get('path','src/main.py'))
+    if a.get('hash')!=digest(raw): raise Failure('Robot file changed. Reload before saving.')
+    values=a['values']; mapping=a['mapping']; central_validate(values,mapping)
+    new_values=dict(values,REVERSE_DRIVE_BUTTON=values['REVERSE_DRIVE_BUTTON'].upper())
+    new_values.update({key:mapping[role].upper() for role,key in CENTRAL_MAPPING.items()})
+    nodes=assignments(tree); edits=[]
+    for key,value in new_values.items():
+        if value!=literal(nodes[key]):
+            start,end=node_span(text,nodes[key].value); edits.append((start,end,repr(value).encode()))
+    updated=raw
+    for start,end,replacement in sorted(edits,reverse=True): updated=updated[:start]+replacement+updated[end:]
+    # Never run the robot source on the desktop. Validate its syntax and ports.
+    result_tree=ast.parse(updated); hardware(result_tree)
+    increase=values['CLAW_TORQUE_LIMIT'] > old['values']['CLAW_TORQUE_LIMIT']
+    warnings=['Increasing claw torque can increase current, heating and force. Support the claw and test within manufacturer limits.'] if increase else []
+    diff=''.join(difflib.unified_diff(text.splitlines(True),updated.decode().splitlines(True),
+        fromfile=a.get('path','src/main.py'),tofile=a.get('path','src/main.py')))
+    if a.get('apply'):
+        confirmed(a)
+        if increase and a.get('torqueIncreaseApproved') is not True:
+            raise Failure('Explicit torque-increase approval is required after reviewing the heating/force warning.')
+        backup=data_dir(a)/'backups'/str(uuid.uuid4()); backup.parent.mkdir(exist_ok=True); backup.write_bytes(raw)
+        if p.read_bytes()!=raw: raise Failure('Robot file changed during review. Reload.')
+        atomic_write(p,updated)
+        return dict(saved=True,backup=str(backup),hash=digest(updated))
+    return dict(diff=diff,hash=digest(raw),warnings=warnings)
+
 
 def git_status(a):
     root=repo(a)
